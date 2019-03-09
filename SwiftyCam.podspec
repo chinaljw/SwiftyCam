@@ -21,7 +21,7 @@ A drop in Camera View Controller for capturing photos and videos from one AVSess
   # s.screenshots     = 'www.example.com/screenshots_1', 'www.example.com/screenshots_2'
   s.license          = { :type => 'BSD', :file => 'LICENSE' }
   s.author           = { 'Andrew Walz' => 'andrewjwalz@gmail.com' }
-  s.source           = { :git => 'https://github.com/Awalz/SwiftyCam.git', :tag => s.version.to_s }
+  s.source           = { :git => 'https://github.com/chinaljw/SwiftyCam.git', :branch => master }
   # s.social_media_url = 'https://twitter.com/<TWITTER_USERNAME>'
 
   s.ios.deployment_target = '8.0'
