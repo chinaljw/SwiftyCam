@@ -245,8 +245,7 @@ open class SwiftyCamViewController: UIViewController {
 
 	/// Variable to store result of capture session setup
 
-	fileprivate var setupResult                  = SessionSetupResult.success
-
+    fileprivate var setupResult                  = SessionSetupResult.success
 	/// BackgroundID variable for video recording
 
 	fileprivate var backgroundRecordingID        : UIBackgroundTaskIdentifier? = nil
@@ -303,7 +302,7 @@ open class SwiftyCamViewController: UIViewController {
 
 	override open func viewDidLoad() {
 		super.viewDidLoad()
-        self.setup()
+//        self.setup()
 	}
 
     // MARK: ViewDidLayoutSubviews
@@ -956,7 +955,6 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
         
         //No need temporary
 //        addGestureRecognizers()
-        
         
         // Test authorization status for Camera and Micophone
         
