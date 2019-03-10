@@ -269,7 +269,7 @@ open class SwiftyCamViewController: UIViewController {
 
 	/// PreviewView for the capture session
 
-	fileprivate var previewLayer                 : PreviewView!
+	public var previewLayer                 : PreviewView?
 
 	/// UIView for front facing flash
 
@@ -303,42 +303,7 @@ open class SwiftyCamViewController: UIViewController {
 
 	override open func viewDidLoad() {
 		super.viewDidLoad()
-        previewLayer = PreviewView(frame: view.frame, videoGravity: videoGravity)
-        previewLayer.center = view.center
-        view.addSubview(previewLayer)
-        view.sendSubviewToBack(previewLayer)
-
-		// Add Gesture Recognizers
-
-        addGestureRecognizers()
-
-		previewLayer.session = session
-
-		// Test authorization status for Camera and Micophone
-
-		switch AVCaptureDevice.authorizationStatus(for: AVMediaType.video) {
-		case .authorized:
-
-			// already authorized
-			break
-		case .notDetermined:
-
-			// not yet determined
-			sessionQueue.suspend()
-			AVCaptureDevice.requestAccess(for: AVMediaType.video, completionHandler: { [unowned self] granted in
-				if !granted {
-					self.setupResult = .notAuthorized
-				}
-				self.sessionQueue.resume()
-			})
-		default:
-
-			// already been asked. Denied access
-			setupResult = .notAuthorized
-		}
-		sessionQueue.async { [unowned self] in
-			self.configureSession()
-		}
+        self.setup()
 	}
 
     // MARK: ViewDidLayoutSubviews
@@ -348,46 +313,15 @@ open class SwiftyCamViewController: UIViewController {
 
         layer.videoOrientation = orientation
 
-        previewLayer.frame = self.view.bounds
+        if let previewLayer = self.previewLayer {
+            previewLayer.frame = self.view.bounds
+        }
 
     }
 
     override open func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-
-        if let connection =  self.previewLayer?.videoPreviewLayer.connection  {
-
-            let currentDevice: UIDevice = UIDevice.current
-
-            let orientation: UIDeviceOrientation = currentDevice.orientation
-
-            let previewLayerConnection : AVCaptureConnection = connection
-
-            if previewLayerConnection.isVideoOrientationSupported {
-
-                switch (orientation) {
-                case .portrait: updatePreviewLayer(layer: previewLayerConnection, orientation: .portrait)
-
-                    break
-
-                case .landscapeRight: updatePreviewLayer(layer: previewLayerConnection, orientation: .landscapeLeft)
-
-                    break
-
-                case .landscapeLeft: updatePreviewLayer(layer: previewLayerConnection, orientation: .landscapeRight)
-
-                    break
-
-                case .portraitUpsideDown: updatePreviewLayer(layer: previewLayerConnection, orientation: .portraitUpsideDown)
-
-                    break
-
-                default: updatePreviewLayer(layer: previewLayerConnection, orientation: .portrait)
-
-                    break
-                }
-            }
-        }
+        self.updatePreviewViewForOrientationChanging()
     }
 
     // MARK: ViewWillAppear
@@ -396,8 +330,7 @@ open class SwiftyCamViewController: UIViewController {
 
     open override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStartRunning), name: .AVCaptureSessionDidStartRunning, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStopRunning),  name: .AVCaptureSessionDidStopRunning,  object: nil)
+        
     }
 
 	// MARK: ViewDidAppear
@@ -405,42 +338,7 @@ open class SwiftyCamViewController: UIViewController {
 	/// ViewDidAppear(_ animated:) Implementation
 	override open func viewDidAppear(_ animated: Bool) {
 		super.viewDidAppear(animated)
-
-		// Subscribe to device rotation notifications
-
-		if shouldUseDeviceOrientation {
-			orientation.start()
-		}
-
-		// Set background audio preference
-
-		setBackgroundAudioPreference()
-
-		sessionQueue.async {
-			switch self.setupResult {
-			case .success:
-				// Begin Session
-				self.session.startRunning()
-				self.isSessionRunning = self.session.isRunning
-
-                // Preview layer video orientation can be set only after the connection is created
-                DispatchQueue.main.async {
-                    self.previewLayer.videoPreviewLayer.connection?.videoOrientation = self.orientation.getPreviewLayerOrientation()
-                }
-
-			case .notAuthorized:
-                if self.shouldPrompToAppSettings == true {
-                    self.promptToAppSettings()
-                } else {
-                    self.cameraDelegate?.swiftyCamNotAuthorized(self)
-                }
-			case .configurationFailed:
-				// Unknown Error
-                DispatchQueue.main.async {
-                    self.cameraDelegate?.swiftyCamDidFailToConfigure(self)
-                }
-			}
-		}
+		self.resume()
 	}
 
 	// MARK: ViewDidDisappear
@@ -451,22 +349,7 @@ open class SwiftyCamViewController: UIViewController {
 	override open func viewDidDisappear(_ animated: Bool) {
 		super.viewDidDisappear(animated)
 
-        NotificationCenter.default.removeObserver(self)
-        sessionRunning = false
-
-		// If session is running, stop the session
-		if self.isSessionRunning == true {
-			self.session.stopRunning()
-			self.isSessionRunning = false
-		}
-
-		//Disble flash if it is currently enabled
-		disableFlash()
-
-		// Unsubscribe from device rotation notifications
-		if shouldUseDeviceOrientation {
-			orientation.stop()
-		}
+        self.suspend()
 	}
 
 	// MARK: Public Functions
@@ -522,11 +405,11 @@ open class SwiftyCamViewController: UIViewController {
 			flashView = UIView(frame: view.frame)
 			flashView?.backgroundColor = UIColor.white
 			flashView?.alpha = 0.85
-			previewLayer.addSubview(flashView!)
+            previewLayer?.addSubview(flashView!)
 		}
 
         //Must be fetched before on main thread
-        let previewOrientation = previewLayer.videoPreviewLayer.connection!.videoOrientation
+        let previewOrientation = previewLayer?.videoPreviewLayer.connection!.videoOrientation
 
 		sessionQueue.async { [unowned self] in
 			if !movieFileOutput.isRecording {
@@ -543,11 +426,18 @@ open class SwiftyCamViewController: UIViewController {
 					movieFileOutputConnection?.isVideoMirrored = true
 				}
 
-				movieFileOutputConnection?.videoOrientation = self.orientation.getVideoOrientation() ?? previewOrientation
+                movieFileOutputConnection?.videoOrientation = self.orientation.getVideoOrientation() ?? previewOrientation ?? .portrait
 
 				// Start recording to a temporary file.
-				let outputFileName = UUID().uuidString
-				let outputFilePath = (self.outputFolder as NSString).appendingPathComponent((outputFileName as NSString).appendingPathExtension("mov")!)
+                var outputFilePath: String!
+                if let specificPath = self.currentVideoOutputFilePath {
+                    outputFilePath = specificPath
+                }
+				else
+                {
+                    let outputFileName = UUID().uuidString
+                    outputFilePath = (self.outputFolder as NSString).appendingPathComponent((outputFileName as NSString).appendingPathExtension("mov")!)
+                }
 				movieFileOutput.startRecording(to: URL(fileURLWithPath: outputFilePath), recordingDelegate: self)
 				self.isVideoRecording = true
 				DispatchQueue.main.async {
@@ -632,6 +522,7 @@ open class SwiftyCamViewController: UIViewController {
 			}
 
 			self.session.startRunning()
+            self.isSessionRunning = true;
 		}
 
 		// If flash is enabled, disable it as the torch is needed for front facing camera
@@ -1042,6 +933,180 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
             self.cameraDelegate?.swiftyCamSessionDidStopRunning(self)
         }
     }
+    
+    
+    // MARK: - weigege extension
+    public var currentVideoOutputFilePath : String?
+    
+    public var needPreviewView : Bool = false
+    
+    public func setup() {
+        
+        if self.needPreviewView {
+            previewLayer = PreviewView(frame: view.frame, videoGravity: videoGravity)
+            if let previewLayer = self.previewLayer {
+                previewLayer.center = view.center
+                view.addSubview(previewLayer)
+                view.sendSubviewToBack(previewLayer)
+                previewLayer.session = session
+            }
+        }
+        
+        // Add Gesture Recognizers
+        
+        //No need temporary
+//        addGestureRecognizers()
+        
+        
+        // Test authorization status for Camera and Micophone
+        
+        switch AVCaptureDevice.authorizationStatus(for: AVMediaType.video) {
+        case .authorized:
+            
+            // already authorized
+            break
+        case .notDetermined:
+            
+            // not yet determined
+            sessionQueue.suspend()
+            AVCaptureDevice.requestAccess(for: AVMediaType.video, completionHandler: { [unowned self] granted in
+                if !granted {
+                    self.setupResult = .notAuthorized
+                }
+                self.sessionQueue.resume()
+            })
+        default:
+            
+            // already been asked. Denied access
+            setupResult = .notAuthorized
+        }
+        sessionQueue.async { [unowned self] in
+            self.configureSession()
+        }
+    }
+    
+    public func suspend() {
+        NotificationCenter.default.removeObserver(self)
+        sessionRunning = false
+        
+        // If session is running, stop the session
+        if self.isSessionRunning == true {
+            self.session.stopRunning()
+            self.isSessionRunning = false
+        }
+        
+        //Disble flash if it is currently enabled
+        disableFlash()
+        
+        // Unsubscribe from device rotation notifications
+        if shouldUseDeviceOrientation {
+            orientation.stop()
+        }
+    }
+    
+    public func resume() {
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStartRunning), name: .AVCaptureSessionDidStartRunning, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStopRunning),  name: .AVCaptureSessionDidStopRunning,  object: nil)
+        
+        // Subscribe to device rotation notifications
+        
+        if shouldUseDeviceOrientation {
+            orientation.start()
+        }
+        
+        // Set background audio preference
+        
+        setBackgroundAudioPreference()
+        
+        sessionQueue.async {
+            switch self.setupResult {
+            case .success:
+                // Begin Session
+                self.session.startRunning()
+                self.isSessionRunning = self.session.isRunning
+                
+                // Preview layer video orientation can be set only after the connection is created
+                if let previewLayer = self.previewLayer {
+                    DispatchQueue.main.async {
+                        previewLayer.videoPreviewLayer.connection?.videoOrientation = self.orientation.getPreviewLayerOrientation()
+                    }
+                }
+                
+            case .notAuthorized:
+                if self.shouldPrompToAppSettings == true {
+                    self.promptToAppSettings()
+                } else {
+                    self.cameraDelegate?.swiftyCamNotAuthorized(self)
+                }
+            case .configurationFailed:
+                // Unknown Error
+                DispatchQueue.main.async {
+                    self.cameraDelegate?.swiftyCamDidFailToConfigure(self)
+                }
+            }
+        }
+    }
+    
+    public func startVideoRecording(withFilePath filePath: String?) {
+        self.currentVideoOutputFilePath = filePath
+        self.startVideoRecording()
+    }
+    
+    public func updatePreviewViewForOrientationChanging() {
+        if let connection =  self.previewLayer?.videoPreviewLayer.connection  {
+            
+            let currentDevice: UIDevice = UIDevice.current
+            
+            let orientation: UIDeviceOrientation = currentDevice.orientation
+            
+            let previewLayerConnection : AVCaptureConnection = connection
+            
+            if previewLayerConnection.isVideoOrientationSupported {
+                
+                switch (orientation) {
+                case .portrait: updatePreviewLayer(layer: previewLayerConnection, orientation: .portrait)
+                
+                    break
+                    
+                case .landscapeRight: updatePreviewLayer(layer: previewLayerConnection, orientation: .landscapeLeft)
+                
+                    break
+                    
+                case .landscapeLeft: updatePreviewLayer(layer: previewLayerConnection, orientation: .landscapeRight)
+                
+                    break
+                    
+                case .portraitUpsideDown: updatePreviewLayer(layer: previewLayerConnection, orientation: .portraitUpsideDown)
+                
+                    break
+                    
+                default: updatePreviewLayer(layer: previewLayerConnection, orientation: .portrait)
+                
+                    break
+                }
+            }
+        }
+    }
+    
+    public func asyncStartSession(completion:(()->Void)?) {
+        sessionQueue.async {
+            self.session.startRunning()
+            self.isSessionRunning = self.session.isRunning
+            completion?()
+        }
+    }
+    
+    public func asyncStopSession(completion:(()->Void)?) {
+        sessionQueue.async {
+            self.session.stopRunning()
+            self.isSessionRunning = self.session.isRunning
+            completion?()
+        }
+    }
+    
+    //MARK: -
+    
 }
 
 extension SwiftyCamViewController : SwiftyCamButtonDelegate {
@@ -1234,24 +1299,27 @@ extension SwiftyCamViewController {
 	*/
 
 	fileprivate func addGestureRecognizers() {
-		pinchGesture = UIPinchGestureRecognizer(target: self, action: #selector(zoomGesture(pinch:)))
-		pinchGesture.delegate = self
-		previewLayer.addGestureRecognizer(pinchGesture)
-
-		let singleTapGesture = UITapGestureRecognizer(target: self, action: #selector(singleTapGesture(tap:)))
-		singleTapGesture.numberOfTapsRequired = 1
-		singleTapGesture.delegate = self
-		previewLayer.addGestureRecognizer(singleTapGesture)
-
-		let doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(doubleTapGesture(tap:)))
-		doubleTapGesture.numberOfTapsRequired = 2
-		doubleTapGesture.delegate = self
-		previewLayer.addGestureRecognizer(doubleTapGesture)
-
-        panGesture = UIPanGestureRecognizer(target: self, action: #selector(panGesture(pan:)))
-        panGesture.delegate = self
-        previewLayer.addGestureRecognizer(panGesture)
+        if let previewLayer = self.previewLayer {
+            pinchGesture = UIPinchGestureRecognizer(target: self, action: #selector(zoomGesture(pinch:)))
+            pinchGesture.delegate = self
+            previewLayer.addGestureRecognizer(pinchGesture)
+            
+            let singleTapGesture = UITapGestureRecognizer(target: self, action: #selector(singleTapGesture(tap:)))
+            singleTapGesture.numberOfTapsRequired = 1
+            singleTapGesture.delegate = self
+            previewLayer.addGestureRecognizer(singleTapGesture)
+            
+            let doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(doubleTapGesture(tap:)))
+            doubleTapGesture.numberOfTapsRequired = 2
+            doubleTapGesture.delegate = self
+            previewLayer.addGestureRecognizer(doubleTapGesture)
+            
+            panGesture = UIPanGestureRecognizer(target: self, action: #selector(panGesture(pan:)))
+            panGesture.delegate = self
+            previewLayer.addGestureRecognizer(panGesture)
+        }
 	}
+    
 }
 
 
