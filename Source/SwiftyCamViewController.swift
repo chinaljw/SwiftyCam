@@ -213,10 +213,8 @@ open class SwiftyCamViewController: UIViewController {
 
 	/// Returns true if the capture session is currently running
 
-    private(set) public var isSessionRunning     = false {
-        didSet {
-            
-        }
+    public var isSessionRunning: Bool  {
+        return self.sessionRunning
     }
 
 	/// Returns the CameraSelection corresponding to the currently utilized camera
@@ -288,7 +286,9 @@ open class SwiftyCamViewController: UIViewController {
 
     /// Boolean to store when View Controller is notified session is running
 
-    fileprivate var sessionRunning               = false
+    fileprivate var sessionRunning               : Bool {
+        return self.session.isRunning
+    }
 
 	/// Disable view autorotation for forced portrait recorindg
 
@@ -513,7 +513,7 @@ open class SwiftyCamViewController: UIViewController {
 
         if !self.runSessionWhenUsing {
             session.stopRunning()
-            self.isSessionRunning = false
+//            self.isSessionRunning = false
         }
 
 		sessionQueue.async { [unowned self] in
@@ -531,7 +531,7 @@ open class SwiftyCamViewController: UIViewController {
 
             if !self.runSessionWhenUsing {
                 self.session.startRunning()
-                self.isSessionRunning = true;
+//                self.isSessionRunning = true;
             }
             
 		}
@@ -930,7 +930,8 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
     /// Called when Notification Center registers session starts running
 
     @objc private func captureSessionDidStartRunning() {
-        sessionRunning = true
+//        sessionRunning = true
+//        self.isSessionRunning = true
         DispatchQueue.main.async {
             self.cameraDelegate?.swiftyCamSessionDidStartRunning(self)
         }
@@ -939,7 +940,8 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
     /// Called when Notification Center registers session stops running
 
     @objc private func captureSessionDidStopRunning() {
-        sessionRunning = false
+//        sessionRunning = false
+//        self.isSessionRunning = false
         DispatchQueue.main.async {
             self.cameraDelegate?.swiftyCamSessionDidStopRunning(self)
         }
@@ -1002,7 +1004,7 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
             // If session is running, stop the session
             if self.isSessionRunning == true {
                 self.session.stopRunning()
-                self.isSessionRunning = false
+//                self.isSessionRunning = false
             }
         }
         
@@ -1036,7 +1038,7 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
                 // Begin Session
                 if !self.runSessionWhenUsing {
                     self.session.startRunning()
-                    self.isSessionRunning = self.session.isRunning
+//                    self.isSessionRunning = self.session.isRunning
                 }
                 
                 // Preview layer video orientation can be set only after the connection is created
@@ -1105,7 +1107,7 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
     public func asyncStartSession(completion:(()->Void)?) {
         sessionQueue.async {
             self.session.startRunning()
-            self.isSessionRunning = self.session.isRunning
+//            self.isSessionRunning = self.session.isRunning
             DispatchQueue.main.async {
                 completion?()
             }
@@ -1115,7 +1117,7 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
     public func asyncStopSession(completion:(()->Void)?) {
         sessionQueue.async {
             self.session.stopRunning()
-            self.isSessionRunning = self.session.isRunning
+//            self.isSessionRunning = self.session.isRunning
             DispatchQueue.main.async {
                 completion?()
             }
