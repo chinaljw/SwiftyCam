@@ -213,7 +213,11 @@ open class SwiftyCamViewController: UIViewController {
 
 	/// Returns true if the capture session is currently running
 
-	private(set) public var isSessionRunning     = false
+    private(set) public var isSessionRunning     = false {
+        didSet {
+            
+        }
+    }
 
 	/// Returns the CameraSelection corresponding to the currently utilized camera
 
@@ -295,6 +299,8 @@ open class SwiftyCamViewController: UIViewController {
 	/// Sets output video codec
     
     public var videoCodecType: AVVideoCodecType? = nil
+    
+    public var runSessionWhenUsing = false
 
 	// MARK: ViewDidLoad
 
@@ -505,7 +511,10 @@ open class SwiftyCamViewController: UIViewController {
 			currentCamera = .front
 		}
 
-		session.stopRunning()
+        if !self.runSessionWhenUsing {
+            session.stopRunning()
+            self.isSessionRunning = false
+        }
 
 		sessionQueue.async { [unowned self] in
 
@@ -520,8 +529,11 @@ open class SwiftyCamViewController: UIViewController {
 				self.cameraDelegate?.swiftyCam(self, didSwitchCameras: self.currentCamera)
 			}
 
-			self.session.startRunning()
-            self.isSessionRunning = true;
+            if !self.runSessionWhenUsing {
+                self.session.startRunning()
+                self.isSessionRunning = true;
+            }
+            
 		}
 
 		// If flash is enabled, disable it as the torch is needed for front facing camera
@@ -937,11 +949,11 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
     // MARK: - weigege extension
     public var currentVideoOutputFilePath : String?
     
-    public var needPreviewView : Bool = false
+    public var needsPreviewView : Bool = false
     
     public func setup() {
         
-        if self.needPreviewView {
+        if self.needsPreviewView {
             previewLayer = PreviewView(frame: view.frame, videoGravity: videoGravity)
             if let previewLayer = self.previewLayer {
                 previewLayer.center = view.center
@@ -985,12 +997,13 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
     
     public func suspend() {
         NotificationCenter.default.removeObserver(self)
-        sessionRunning = false
         
-        // If session is running, stop the session
-        if self.isSessionRunning == true {
-            self.session.stopRunning()
-            self.isSessionRunning = false
+        if !self.runSessionWhenUsing {
+            // If session is running, stop the session
+            if self.isSessionRunning == true {
+                self.session.stopRunning()
+                self.isSessionRunning = false
+            }
         }
         
         //Disble flash if it is currently enabled
@@ -1021,8 +1034,10 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
             switch self.setupResult {
             case .success:
                 // Begin Session
-                self.session.startRunning()
-                self.isSessionRunning = self.session.isRunning
+                if !self.runSessionWhenUsing {
+                    self.session.startRunning()
+                    self.isSessionRunning = self.session.isRunning
+                }
                 
                 // Preview layer video orientation can be set only after the connection is created
                 if let previewLayer = self.previewLayer {
@@ -1091,7 +1106,9 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
         sessionQueue.async {
             self.session.startRunning()
             self.isSessionRunning = self.session.isRunning
-            completion?()
+            DispatchQueue.main.async {
+                completion?()
+            }
         }
     }
     
@@ -1099,7 +1116,9 @@ fileprivate func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
         sessionQueue.async {
             self.session.stopRunning()
             self.isSessionRunning = self.session.isRunning
-            completion?()
+            DispatchQueue.main.async {
+                completion?()
+            }
         }
     }
     
